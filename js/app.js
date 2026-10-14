@@ -97,7 +97,6 @@ $(function () {
     $("#elapsed-time").text(Timer.formatDuration(elapsed));
 
     if (s.status === "running") {
-      Notifications.checkMilestone(s, earnings);
       Notifications.checkGoal(s, earnings, elapsed);
 
       var minuteMark = Math.floor(elapsed / 60000);
@@ -106,45 +105,31 @@ $(function () {
         announce(minuteMark + " minute" + (minuteMark === 1 ? "" : "s") + " in, "
           + Privacy.mask("$" + earnings.toFixed(2)) + " earned.");
       }
+    } else if (s.status === "paused") {
+      Notifications.checkPauseReminder(s);
     }
   }
 
-  $("#start-btn").on("click", function () {
+  // Shared by the Start button and the "Start session" PWA shortcut.
+  function startSession() {
     var profileId = Storage.getActiveProfileId();
     if (!profileId) {
       toast("Add a pay profile first.");
-      return;
+      return false;
     }
-    var settings = Storage.getSettings().notifications;
-    var goal = null;
-    if (settings.goalEnabled && settings.goalValue > 0) {
-      goal = { type: settings.goalType, value: Number(settings.goalValue) };
-    }
+    if (Timer.hasSession()) return false;
     lastSrAnnounceMinute = -1;
-    Timer.start(profileId, goal);
+    Timer.start(profileId);
     setControlsForStatus("running");
     announce("Session started.");
     tick();
-  });
+    return true;
+  }
 
-  $("#pause-btn").on("click", function () {
-    Timer.pause();
-    var s = Timer.session();
-    setControlsForStatus("paused");
-    Notifications.armPauseReminder(s.pausedAt);
-    announce("Taking a break. Timer paused.");
-  });
-
-  $("#resume-btn").on("click", function () {
-    Timer.resume();
-    setControlsForStatus("running");
-    Notifications.clearPauseReminder();
-    announce("Back to work. Timer resumed.");
-  });
-
-  $("#stop-btn").on("click", function () {
+  // Shared by the Stop button and the "Stop session" PWA shortcut.
+  function stopSession() {
+    if (!Timer.hasSession()) return false;
     var entry = Timer.stop();
-    Notifications.clearPauseReminder();
     setControlsForStatus("idle");
     renderProfileSelect();
     History.render();
@@ -153,7 +138,24 @@ $(function () {
       announce("Session saved: " + amountText + " for " + Timer.formatDuration(entry.durationMs) + ".");
       toast("Saved " + amountText + " to history.");
     }
+    return true;
+  }
+
+  $("#start-btn").on("click", startSession);
+
+  $("#pause-btn").on("click", function () {
+    Timer.pause();
+    setControlsForStatus("paused");
+    announce("Taking a break. Timer paused.");
   });
+
+  $("#resume-btn").on("click", function () {
+    Timer.resume();
+    setControlsForStatus("running");
+    announce("Back to work. Timer resumed.");
+  });
+
+  $("#stop-btn").on("click", stopSession);
 
   $("#clear-history").on("click", function () {
     if (!Storage.getHistory().length) return;
@@ -359,45 +361,106 @@ $(function () {
     var s = Storage.getSettings();
     $("#theme-select").val(s.theme);
 
-    var n = s.notifications;
-    $("#notify-milestone").prop("checked", n.milestoneEnabled);
-    $("#milestone-amount").val(n.milestoneAmount);
-    $("#notify-pause").prop("checked", n.pauseReminderEnabled);
-    $("#pause-minutes").val(n.pauseReminderMinutes);
-    $("#notify-goal").prop("checked", n.goalEnabled);
-    $("#goal-type").val(n.goalType);
-    $("#goal-value").val(n.goalValue || "");
+    var pause = s.notifications.pauseReminder;
+    $("#notify-pause").prop("checked", pause.enabled);
+    $("#pause-mode").val(pause.mode);
+    $("#pause-every-minutes").val(pause.everyMinutes);
+    renderTagList("pause-custom-list", pause.customMinutes, function (v) { return v + " min"; });
+
+    var goal = s.notifications.goal;
+    $("#notify-goal").prop("checked", goal.enabled);
+    $("#goal-type").val(goal.type);
+    $("#goal-mode").val(goal.mode);
+    $("#goal-every-value").val(goal.everyValue);
+    renderTagList("goal-custom-list", goal.customValues, function (v) {
+      return goal.type === "amount" ? ("$" + v) : (v + "h");
+    });
 
     syncNotificationFieldVisibility();
-    syncGoalLabel();
+    syncGoalLabels();
     updatePermissionHint();
   }
 
   function syncNotificationFieldVisibility() {
-    $("#milestone-amount-field").attr("hidden", !$("#notify-milestone").is(":checked"));
-    $("#pause-minutes-field").attr("hidden", !$("#notify-pause").is(":checked"));
+    var pauseOn = $("#notify-pause").is(":checked");
+    var pauseCustom = $("#pause-mode").val() === "custom";
+    $("#pause-mode-field, #pause-every-field, #pause-custom-field").attr("hidden", !pauseOn);
+    if (pauseOn) {
+      $("#pause-every-field").attr("hidden", pauseCustom);
+      $("#pause-custom-field").attr("hidden", !pauseCustom);
+    }
+
     var goalOn = $("#notify-goal").is(":checked");
-    $("#goal-type-field").attr("hidden", !goalOn);
-    $("#goal-value-field").attr("hidden", !goalOn);
+    var goalCustom = $("#goal-mode").val() === "custom";
+    $("#goal-type-field, #goal-mode-field, #goal-every-field, #goal-custom-field").attr("hidden", !goalOn);
+    if (goalOn) {
+      $("#goal-every-field").attr("hidden", goalCustom);
+      $("#goal-custom-field").attr("hidden", !goalCustom);
+    }
   }
 
-  function syncGoalLabel() {
+  function syncGoalLabels() {
     var isAmount = $("#goal-type").val() === "amount";
-    $("#goal-value-label").text(isAmount ? "Target amount ($)" : "Target duration (hours)");
+    $("#goal-every-label").text(isAmount ? "Every ($)" : "Every (hours)");
+    $("#goal-custom-label").text(isAmount ? "Custom targets ($)" : "Custom targets (hours)");
+  }
+
+  // Generic chip-list renderer shared by the pause-reminder and goal custom-value lists.
+  function renderTagList(containerId, values, formatFn) {
+    var $container = $("#" + containerId).empty();
+    values = values || [];
+    if (!values.length) {
+      $container.append('<span class="tag-empty">None yet</span>');
+      return;
+    }
+    values.forEach(function (v) {
+      var $tag = $('<span class="tag"></span>').text(formatFn(v));
+      var $remove = $('<button type="button" aria-label="Remove"><span aria-hidden="true">&times;</span></button>')
+        .on("click", function () { removeTagValue(containerId, v); });
+      $tag.append($remove);
+      $container.append($tag);
+    });
+  }
+
+  function removeTagValue(containerId, value) {
+    if (containerId === "pause-custom-list") {
+      var pauseList = Storage.getSettings().notifications.pauseReminder.customMinutes.filter(function (v) { return v !== value; });
+      updatePauseReminderSettings({ customMinutes: pauseList });
+      renderTagList("pause-custom-list", pauseList, function (v) { return v + " min"; });
+    } else {
+      var goalSettings = Storage.getSettings().notifications.goal;
+      var goalList = goalSettings.customValues.filter(function (v) { return v !== value; });
+      updateGoalSettings({ customValues: goalList });
+      renderTagList("goal-custom-list", goalList, function (v) {
+        return goalSettings.type === "amount" ? ("$" + v) : (v + "h");
+      });
+    }
+  }
+
+  function updatePauseReminderSettings(patch) {
+    var settings = Storage.getSettings();
+    $.extend(settings.notifications.pauseReminder, patch);
+    Storage.setSettings(settings);
+  }
+
+  function updateGoalSettings(patch) {
+    var settings = Storage.getSettings();
+    $.extend(settings.notifications.goal, patch);
+    Storage.setSettings(settings);
   }
 
   function persistNotificationSettings() {
-    var settings = Storage.getSettings();
-    settings.notifications = {
-      milestoneEnabled: $("#notify-milestone").is(":checked"),
-      milestoneAmount: parseFloat($("#milestone-amount").val()) || 25,
-      pauseReminderEnabled: $("#notify-pause").is(":checked"),
-      pauseReminderMinutes: parseFloat($("#pause-minutes").val()) || 15,
-      goalEnabled: $("#notify-goal").is(":checked"),
-      goalType: $("#goal-type").val(),
-      goalValue: parseFloat($("#goal-value").val()) || 0
-    };
-    Storage.setSettings(settings);
+    updatePauseReminderSettings({
+      enabled: $("#notify-pause").is(":checked"),
+      mode: $("#pause-mode").val(),
+      everyMinutes: parseFloat($("#pause-every-minutes").val()) || 15
+    });
+    updateGoalSettings({
+      enabled: $("#notify-goal").is(":checked"),
+      type: $("#goal-type").val(),
+      mode: $("#goal-mode").val(),
+      everyValue: parseFloat($("#goal-every-value").val()) || 25
+    });
   }
 
   $("#theme-select").on("change", function () {
@@ -422,13 +485,49 @@ $(function () {
     announce(hidden ? "Dollar amounts hidden." : "Dollar amounts shown.");
   });
 
-  $("#notify-milestone, #notify-pause, #notify-goal, #goal-type").on("change", function () {
+  $("#notify-pause, #pause-mode, #notify-goal, #goal-mode").on("change", function () {
     syncNotificationFieldVisibility();
-    syncGoalLabel();
+    persistNotificationSettings();
   });
 
-  $("#milestone-amount, #pause-minutes, #goal-type, #goal-value, #notify-milestone, #notify-pause, #notify-goal")
-    .on("change", persistNotificationSettings);
+  $("#goal-type").on("change", function () {
+    // Custom targets entered under one goal type (dollars vs. hours) don't carry meaning
+    // under the other, so switch cleanly rather than leaving stale numbers behind.
+    updateGoalSettings({ customValues: [] });
+    syncGoalLabels();
+    syncNotificationFieldVisibility();
+    persistNotificationSettings();
+    renderTagList("goal-custom-list", [], function (v) { return v; });
+  });
+
+  $("#pause-every-minutes, #goal-every-value").on("change", persistNotificationSettings);
+
+  $("#pause-custom-add").on("click", function () {
+    var val = parseFloat($("#pause-custom-input").val());
+    if (!(val > 0)) return;
+    var list = Storage.getSettings().notifications.pauseReminder.customMinutes;
+    if (list.indexOf(val) === -1) {
+      list = list.concat([val]).sort(function (a, b) { return a - b; });
+      updatePauseReminderSettings({ customMinutes: list });
+      renderTagList("pause-custom-list", list, function (v) { return v + " min"; });
+    }
+    $("#pause-custom-input").val("");
+  });
+
+  $("#goal-custom-add").on("click", function () {
+    var val = parseFloat($("#goal-custom-input").val());
+    if (!(val > 0)) return;
+    var goalSettings = Storage.getSettings().notifications.goal;
+    var list = goalSettings.customValues;
+    if (list.indexOf(val) === -1) {
+      list = list.concat([val]).sort(function (a, b) { return a - b; });
+      updateGoalSettings({ customValues: list });
+      renderTagList("goal-custom-list", list, function (v) {
+        return goalSettings.type === "amount" ? ("$" + v) : (v + "h");
+      });
+    }
+    $("#goal-custom-input").val("");
+  });
 
   function updatePermissionHint() {
     var state = Notifications.permission();
@@ -436,7 +535,7 @@ $(function () {
       unsupported: "Notifications aren't supported in this browser.",
       granted: "Notifications are enabled.",
       denied: "Notifications are blocked in your browser settings.",
-      default: "Enable notifications to get milestone, break, and goal alerts."
+      default: "Enable notifications to get break and goal alerts."
     }[state];
     $("#notification-permission-hint").text(hint);
     $("#enable-notifications").attr("hidden", state !== "default");
@@ -507,8 +606,15 @@ $(function () {
   Timer.onTick(tick);
   Timer.startTicking();
 
-  var active = Timer.session();
-  if (active && active.status === "paused") {
-    Notifications.armPauseReminder(active.pausedAt);
+  // Triggered by the PWA's long-press home-screen shortcuts ("Start session" /
+  // "Stop session" in manifest.json), which just open index.html with ?action=...
+  var shortcutAction = new URLSearchParams(location.search).get("action");
+  if (shortcutAction === "start") {
+    startSession();
+  } else if (shortcutAction === "stop") {
+    stopSession();
+  }
+  if (shortcutAction) {
+    window.history.replaceState(null, "", location.pathname);
   }
 });

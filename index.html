@@ -199,44 +199,67 @@
       <p class="settings-hint" id="notification-permission-hint"></p>
       <button type="button" id="enable-notifications" class="btn btn--secondary btn--small">Enable notifications</button>
 
-      <div class="field field--checkbox">
-        <label class="checkbox">
-          <input type="checkbox" id="notify-milestone">
-          <span>Notify at earning milestones</span>
-        </label>
-      </div>
-      <div class="field" id="milestone-amount-field">
-        <label for="milestone-amount">Milestone amount ($)</label>
-        <input type="number" id="milestone-amount" min="1" step="1" value="25">
+      <div class="notif-group">
+        <div class="field field--checkbox">
+          <label class="checkbox">
+            <input type="checkbox" id="notify-pause">
+            <span>Remind me if I stay on break</span>
+          </label>
+        </div>
+        <div class="field" id="pause-mode-field">
+          <label for="pause-mode">Remind me</label>
+          <select id="pause-mode" class="select">
+            <option value="every">Every X minutes</option>
+            <option value="custom">At custom times</option>
+          </select>
+        </div>
+        <div class="field" id="pause-every-field">
+          <label for="pause-every-minutes">Every (minutes)</label>
+          <input type="number" id="pause-every-minutes" min="1" step="1" value="15">
+        </div>
+        <div class="field" id="pause-custom-field">
+          <label>Custom reminders (minutes)</label>
+          <div class="tag-list" id="pause-custom-list"></div>
+          <div class="tag-input-row">
+            <input type="number" id="pause-custom-input" min="1" step="1" placeholder="e.g. 10">
+            <button type="button" id="pause-custom-add" class="text-btn">Add</button>
+          </div>
+        </div>
       </div>
 
-      <div class="field field--checkbox">
-        <label class="checkbox">
-          <input type="checkbox" id="notify-pause">
-          <span>Remind me if I stay on break</span>
-        </label>
-      </div>
-      <div class="field" id="pause-minutes-field">
-        <label for="pause-minutes">Remind after (minutes)</label>
-        <input type="number" id="pause-minutes" min="1" step="1" value="15">
-      </div>
-
-      <div class="field field--checkbox">
-        <label class="checkbox">
-          <input type="checkbox" id="notify-goal">
-          <span>Notify when I reach a session goal</span>
-        </label>
-      </div>
-      <div class="field" id="goal-type-field">
-        <label for="goal-type">Goal type</label>
-        <select id="goal-type" class="select">
-          <option value="amount">Target amount ($)</option>
-          <option value="time">Target duration (hours)</option>
-        </select>
-      </div>
-      <div class="field" id="goal-value-field">
-        <label for="goal-value" id="goal-value-label">Target amount ($)</label>
-        <input type="number" id="goal-value" min="0" step="1">
+      <div class="notif-group">
+        <div class="field field--checkbox">
+          <label class="checkbox">
+            <input type="checkbox" id="notify-goal">
+            <span>Notify me about session goals</span>
+          </label>
+        </div>
+        <div class="field" id="goal-type-field">
+          <label for="goal-type">Goal based on</label>
+          <select id="goal-type" class="select">
+            <option value="amount">Dollar amount</option>
+            <option value="time">Hours worked</option>
+          </select>
+        </div>
+        <div class="field" id="goal-mode-field">
+          <label for="goal-mode">Notify me</label>
+          <select id="goal-mode" class="select">
+            <option value="every">Every X</option>
+            <option value="custom">At custom targets</option>
+          </select>
+        </div>
+        <div class="field" id="goal-every-field">
+          <label for="goal-every-value" id="goal-every-label">Every ($)</label>
+          <input type="number" id="goal-every-value" min="0.01" step="1" value="25">
+        </div>
+        <div class="field" id="goal-custom-field">
+          <label id="goal-custom-label">Custom targets ($)</label>
+          <div class="tag-list" id="goal-custom-list"></div>
+          <div class="tag-input-row">
+            <input type="number" id="goal-custom-input" min="0" step="1" placeholder="e.g. 50">
+            <button type="button" id="goal-custom-add" class="text-btn">Add</button>
+          </div>
+        </div>
       </div>
     </section>
 

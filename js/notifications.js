@@ -1,7 +1,12 @@
 // Local notifications via the service worker's showNotification, so they still fire
 // while the tab is backgrounded (not while fully closed -- there is no push server here).
+//
+// Both break reminders and session goals are checked every tick (while a session exists)
+// rather than scheduled with setTimeout. setTimeout callbacks get silently dropped when a
+// mobile browser suspends a backgrounded tab, so a reminder armed that way can simply never
+// fire. Re-deriving "is this due yet?" from persisted timestamps on every tick means it
+// always catches up as soon as the tab is running again, even if that's later than scheduled.
 var Notifications = (function () {
-  var pauseReminderHandle = null;
 
   function isSupported() {
     return "Notification" in window && "serviceWorker" in navigator;
@@ -27,55 +32,72 @@ var Notifications = (function () {
     });
   }
 
-  // Called on every tick while a session is running.
-  function checkMilestone(s, earnings) {
-    var settings = Storage.getSettings().notifications;
-    if (!settings.milestoneEnabled || !settings.milestoneAmount) return;
-    var step = Number(settings.milestoneAmount);
-    var reached = Math.floor(earnings / step);
-    if (reached > (s.lastMilestoneReached || 0)) {
-      s.lastMilestoneReached = reached;
-      Timer.updateSession(s);
-      fire("Milestone reached", "You've earned $" + (reached * step).toFixed(2) + " this session.");
-    }
+  function formatGoalValue(type, value) {
+    return type === "amount" ? ("$" + value.toFixed(2)) : (value + " hour" + (value === 1 ? "" : "s"));
   }
 
-  function checkGoal(s, earnings, elapsedMs) {
-    var settings = Storage.getSettings().notifications;
-    if (!settings.goalEnabled || !s.goal || s.goalNotified) return;
-    var hit = s.goal.type === "amount"
-      ? earnings >= s.goal.value
-      : elapsedMs >= s.goal.value * 3600000;
-    if (hit) {
-      s.goalNotified = true;
-      Timer.updateSession(s);
-      var msg = s.goal.type === "amount"
-        ? "You hit your $" + s.goal.value + " goal."
-        : "You hit your " + s.goal.value + "-hour goal.";
-      fire("Goal reached", msg);
-    }
-  }
+  // Called every tick while a session is paused.
+  function checkPauseReminder(s) {
+    var settings = Storage.getSettings().notifications.pauseReminder;
+    if (!settings.enabled || s.status !== "paused") return;
+    var elapsedMinutes = (Date.now() - s.pausedAt) / 60000;
 
-  // pausedSinceMs lets a page reload re-arm the reminder relative to when the break
-  // actually started, rather than restarting the full window from scratch.
-  function armPauseReminder(pausedSinceMs) {
-    clearPauseReminder();
-    var settings = Storage.getSettings().notifications;
-    if (!settings.pauseReminderEnabled) return;
-    var minutes = Number(settings.pauseReminderMinutes) || 15;
-    var elapsedPause = pausedSinceMs ? (Date.now() - pausedSinceMs) : 0;
-    var remaining = Math.max(0, minutes * 60000 - elapsedPause);
-    pauseReminderHandle = setTimeout(function () {
-      if (Timer.isPaused()) {
-        fire("Still on a break?", "Tap Back to Work when you're ready to keep the timer going.");
+    if (settings.mode === "custom") {
+      var notified = s.pauseCustomNotified || [];
+      var changed = false;
+      (settings.customMinutes || []).forEach(function (m) {
+        if (elapsedMinutes >= m && notified.indexOf(m) === -1) {
+          notified.push(m);
+          changed = true;
+          fire("Still on a break?", "You've been on break for " + m + " minute" + (m === 1 ? "" : "s") + ".");
+        }
+      });
+      if (changed) {
+        s.pauseCustomNotified = notified;
+        Timer.updateSession(s);
       }
-    }, remaining);
+    } else {
+      var every = Number(settings.everyMinutes) || 0;
+      if (every <= 0) return;
+      var reached = Math.floor(elapsedMinutes / every);
+      if (reached > (s.pauseEveryReached || 0)) {
+        s.pauseEveryReached = reached;
+        Timer.updateSession(s);
+        var total = reached * every;
+        fire("Still on a break?", "You've been on break for " + total + " minute" + (total === 1 ? "" : "s") + ".");
+      }
+    }
   }
 
-  function clearPauseReminder() {
-    if (pauseReminderHandle) {
-      clearTimeout(pauseReminderHandle);
-      pauseReminderHandle = null;
+  // Called every tick while a session is running.
+  function checkGoal(s, earnings, elapsedMs) {
+    var settings = Storage.getSettings().notifications.goal;
+    if (!settings.enabled) return;
+    var value = settings.type === "amount" ? earnings : (elapsedMs / 3600000);
+
+    if (settings.mode === "custom") {
+      var notified = s.goalCustomNotified || [];
+      var changed = false;
+      (settings.customValues || []).forEach(function (v) {
+        if (value >= v && notified.indexOf(v) === -1) {
+          notified.push(v);
+          changed = true;
+          fire("Goal reached", "You hit " + formatGoalValue(settings.type, v) + ".");
+        }
+      });
+      if (changed) {
+        s.goalCustomNotified = notified;
+        Timer.updateSession(s);
+      }
+    } else {
+      var every = Number(settings.everyValue) || 0;
+      if (every <= 0) return;
+      var reached = Math.floor(value / every);
+      if (reached > (s.goalEveryReached || 0)) {
+        s.goalEveryReached = reached;
+        Timer.updateSession(s);
+        fire("Goal reached", "You hit " + formatGoalValue(settings.type, reached * every) + ".");
+      }
     }
   }
 
@@ -83,9 +105,7 @@ var Notifications = (function () {
     isSupported: isSupported,
     permission: permission,
     requestPermission: requestPermission,
-    checkMilestone: checkMilestone,
-    checkGoal: checkGoal,
-    armPauseReminder: armPauseReminder,
-    clearPauseReminder: clearPauseReminder
+    checkPauseReminder: checkPauseReminder,
+    checkGoal: checkGoal
   };
 })();

@@ -28,16 +28,15 @@ var Timer = (function () {
     return Math.max(0, reference - s.startedAt - (s.totalPausedMs || 0));
   }
 
-  function start(profileId, goal) {
+  function start(profileId) {
     var s = {
       profileId: profileId,
       status: "running",
       startedAt: Date.now(),
       pausedAt: null,
       totalPausedMs: 0,
-      goal: goal || null,
-      lastMilestoneReached: 0,
-      goalNotified: false
+      goalEveryReached: 0,
+      goalCustomNotified: []
     };
     Storage.setActiveSession(s);
     return s;
@@ -48,6 +47,8 @@ var Timer = (function () {
     if (!s || s.status !== "running") return s;
     s.status = "paused";
     s.pausedAt = Date.now();
+    s.pauseEveryReached = 0;
+    s.pauseCustomNotified = [];
     Storage.setActiveSession(s);
     return s;
   }

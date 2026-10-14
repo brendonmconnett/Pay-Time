@@ -9,8 +9,8 @@ A small installable web app that tracks how much money you've earned in real tim
 - Session history log, kept locally.
 - Export/import all data as a single JSON file (useful for backing up or moving to another browser/device).
 - Light/dark theme, defaulting to the system preference, with a manual override.
-- Installable as a PWA with offline support via a service worker.
-- Local notifications for earning milestones, long breaks, and session goals.
+- Installable as a PWA with offline support via a service worker. Long-pressing the installed app's icon offers "Start session" / "Stop session" shortcuts that act on your last-selected pay profile.
+- Local notifications for long breaks and session goals, each configurable as either a recurring "every X" interval or a custom list of specific thresholds.
 
 ## Running locally
 
@@ -27,6 +27,10 @@ Then open `http://localhost:8080`.
 1. Push this folder to a GitHub repository.
 2. In the repo settings, enable **Pages** and point it at the branch/root containing these files (no build step needed).
 3. Visit the published URL — all paths here are relative, so it works whether the site is served from the domain root or a `/repo-name/` subpath.
+
+## App shortcut limitations
+
+The long-press "Start session" / "Stop session" shortcuts come from `manifest.json`'s `shortcuts` field. They only appear once the app is actually installed (added to home screen / installed as a desktop app), and only on platforms that support manifest shortcuts — Android Chrome and desktop Chrome/Edge (right-click the taskbar/dock icon), not iOS Safari.
 
 ## Notification limitations
 

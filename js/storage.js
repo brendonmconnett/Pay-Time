@@ -14,13 +14,19 @@ var Storage = (function () {
     theme: "system",
     hideAmounts: false,
     notifications: {
-      milestoneEnabled: false,
-      milestoneAmount: 25,
-      pauseReminderEnabled: false,
-      pauseReminderMinutes: 15,
-      goalEnabled: false,
-      goalType: "amount",
-      goalValue: 0
+      pauseReminder: {
+        enabled: false,
+        mode: "every",
+        everyMinutes: 15,
+        customMinutes: []
+      },
+      goal: {
+        enabled: false,
+        type: "amount",
+        mode: "every",
+        everyValue: 25,
+        customValues: []
+      }
     }
   };
 
