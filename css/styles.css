@@ -359,6 +359,11 @@ button, input, select {
   font-variant-numeric: tabular-nums;
 }
 
+.pin-input::placeholder {
+  letter-spacing: normal;
+  font-size: 0.95rem;
+}
+
 .pin-error {
   color: var(--danger);
   font-size: 0.82rem;
