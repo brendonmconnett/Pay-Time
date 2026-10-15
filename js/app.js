@@ -360,6 +360,7 @@ $(function () {
   function loadSettingsIntoForm() {
     var s = Storage.getSettings();
     $("#theme-select").val(s.theme);
+    $("#auto-lock-select").val(s.security.autoLockSeconds);
 
     var pause = s.notifications.pauseReminder;
     $("#notify-pause").prop("checked", pause.enabled);
@@ -474,15 +475,124 @@ $(function () {
     $("#theme-select").val(next);
   });
 
-  $("#hide-amounts-toggle").on("click", function () {
-    var hidden = !Privacy.isHidden();
-    Privacy.setHidden(hidden);
-    $(this).attr("aria-pressed", hidden ? "true" : "false");
+  // Shared by manual hide/unhide and by Security's inactivity auto-lock, so every path
+  // that flips visibility keeps the whole UI (not just the live earnings tick) in sync.
+  function refreshAfterVisibilityChange() {
+    $("#hide-amounts-toggle").attr("aria-pressed", Privacy.isHidden() ? "true" : "false");
     updateRateDisplay();
     refreshUIFromSession();
     History.render();
     if ($profilesDialog.open) renderProfilesList();
-    announce(hidden ? "Dollar amounts hidden." : "Dollar amounts shown.");
+  }
+
+  $("#hide-amounts-toggle").on("click", function () {
+    if (Privacy.isHidden()) {
+      openPinDialog("unlock");
+    } else {
+      Privacy.setHidden(true);
+      refreshAfterVisibilityChange();
+      announce("Dollar amounts hidden.");
+    }
+  });
+
+  Security.onLock(function () {
+    refreshAfterVisibilityChange();
+    announce("Dollar amounts hidden after inactivity.");
+  });
+
+  /* ---------- Passcode dialog ---------- */
+
+  var $pinDialog = $("#pin-dialog")[0];
+  var pinMode = null;
+
+  $("#pin-input, #pin-confirm-input").on("input", function () {
+    this.value = this.value.replace(/\D/g, "").slice(0, 4);
+  });
+
+  $("#pin-input, #pin-confirm-input").on("keydown", function (e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      $("#pin-submit").trigger("click");
+    }
+  });
+
+  function showPinError(message) {
+    $("#pin-error").text(message).attr("hidden", false);
+    $("#pin-input").val("").trigger("focus");
+  }
+
+  function openPinDialog(mode) {
+    pinMode = mode;
+    $("#pin-input").val("");
+    $("#pin-confirm-input").val("").attr("hidden", mode !== "set-new");
+    $("#pin-error").attr("hidden", true).text("");
+
+    var copy = {
+      unlock: { title: "Enter passcode", hint: "Enter your passcode to show dollar amounts.", button: "Continue" },
+      "verify-for-change": { title: "Enter current passcode", hint: "Enter your current passcode to continue.", button: "Continue" },
+      "set-new": { title: "Choose a new passcode", hint: "Enter a new 4-digit passcode, then confirm it.", button: "Save" }
+    }[mode];
+    $("#pin-dialog-title").text(copy.title);
+    $("#pin-dialog-hint").text(copy.hint);
+    $("#pin-submit").text(copy.button);
+
+    document.body.classList.add("no-scroll");
+    $pinDialog.showModal();
+    $("#pin-input").trigger("focus");
+  }
+
+  $pinDialog.addEventListener("close", function () {
+    document.body.classList.remove("no-scroll");
+  });
+
+  $("#pin-dialog [data-close-dialog]").on("click", function () {
+    $pinDialog.close();
+  });
+
+  $("#pin-submit").on("click", function () {
+    if (pinMode === "set-new") {
+      var value = $("#pin-input").val();
+      var confirmValue = $("#pin-confirm-input").val();
+      if (!/^\d{4}$/.test(value)) {
+        showPinError("Passcode must be 4 digits.");
+        return;
+      }
+      if (value !== confirmValue) {
+        showPinError("Passcodes don't match.");
+        $("#pin-confirm-input").val("");
+        return;
+      }
+      Security.setPasscode(value).then(function () {
+        $pinDialog.close();
+        toast("Passcode updated.");
+      });
+      return;
+    }
+
+    var entered = $("#pin-input").val();
+    Security.verify(entered).then(function (ok) {
+      if (!ok) {
+        showPinError("Incorrect passcode.");
+        return;
+      }
+      if (pinMode === "unlock") {
+        Privacy.setHidden(false);
+        refreshAfterVisibilityChange();
+        announce("Dollar amounts shown.");
+        Security.armInactivityTimer();
+        $pinDialog.close();
+      } else if (pinMode === "verify-for-change") {
+        openPinDialog("set-new");
+      }
+    });
+  });
+
+  $("#change-passcode").on("click", function () {
+    openPinDialog("verify-for-change");
+  });
+
+  $("#auto-lock-select").on("change", function () {
+    Security.setAutoLockSeconds(parseInt($(this).val(), 10) || 0);
   });
 
   $("#notify-pause, #pause-mode, #notify-goal, #goal-mode").on("change", function () {
@@ -598,6 +708,7 @@ $(function () {
 
   Theme.init();
   Privacy.init();
+  Security.initActivityListeners();
   $("#hide-amounts-toggle").attr("aria-pressed", Privacy.isHidden() ? "true" : "false");
   renderProfileSelect();
   loadSettingsIntoForm();

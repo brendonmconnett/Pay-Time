@@ -12,7 +12,11 @@ var Storage = (function () {
 
   var DEFAULT_SETTINGS = {
     theme: "system",
-    hideAmounts: false,
+    security: {
+      // SHA-256 of "0000" -- the default 4-digit passcode.
+      passcodeHash: "9af15b336e6a9619928537df30b2e6a2376569fcf9d7e773eccede65606529a0",
+      autoLockSeconds: 60
+    },
     notifications: {
       pauseReminder: {
         enabled: false,

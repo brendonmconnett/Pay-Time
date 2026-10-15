@@ -1,5 +1,5 @@
 // Bump this on every deploy that changes any cached file, so clients pick up the update.
-var CACHE_NAME = "pay-time-v4";
+var CACHE_NAME = "pay-time-v5";
 
 var APP_SHELL = [
   "./",
@@ -10,6 +10,7 @@ var APP_SHELL = [
   "js/storage.js",
   "js/theme.js",
   "js/privacy.js",
+  "js/security.js",
   "js/profiles.js",
   "js/timer.js",
   "js/notifications.js",
