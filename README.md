@@ -9,7 +9,7 @@ A small installable web app that tracks how much money you've earned in real tim
 - Session history log, kept locally.
 - Export/import all data as a single JSON file (useful for backing up or moving to another browser/device).
 - Light/dark theme, defaulting to the system preference, with a manual override.
-- Installable as a PWA with offline support via a service worker. Long-pressing the installed app's icon offers "Start session" / "Stop session" shortcuts that act on your last-selected pay profile.
+- Installable as a PWA with offline support via a service worker. Long-pressing the installed app's icon offers "Start session" / "Pause session" / "Stop session" shortcuts that act on your last-selected pay profile.
 - Local notifications for long breaks and session goals, each configurable as either a recurring "every X" interval or a custom list of specific thresholds.
 - Dollar amounts are hidden by default behind a 4-digit passcode (`0000` until changed in Settings). Every fresh load (refresh, reopening the PWA) starts hidden again, and amounts auto-hide after a configurable period of inactivity.
 
@@ -31,7 +31,7 @@ Then open `http://localhost:8080`.
 
 ## App shortcut limitations
 
-The long-press "Start session" / "Stop session" shortcuts come from `manifest.json`'s `shortcuts` field. They only appear once the app is actually installed (added to home screen / installed as a desktop app), and only on platforms that support manifest shortcuts — Android Chrome and desktop Chrome/Edge (right-click the taskbar/dock icon), not iOS Safari.
+The long-press "Start session" / "Pause session" / "Stop session" shortcuts come from `manifest.json`'s `shortcuts` field. They only appear once the app is actually installed (added to home screen / installed as a desktop app), and only on platforms that support manifest shortcuts — Android Chrome and desktop Chrome/Edge (right-click the taskbar/dock icon), not iOS Safari.
 
 ## Passcode security
 

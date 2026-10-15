@@ -110,8 +110,10 @@ $(function () {
     }
   }
 
-  // Shared by the Start button and the "Start session" PWA shortcut.
+  // Shared by the Start button and the "Start session" PWA shortcut. Resumes a paused
+  // session instead of no-op'ing, so the one shortcut covers both "go" cases.
   function startSession() {
+    if (Timer.isPaused()) return resumeSession();
     var profileId = Storage.getActiveProfileId();
     if (!profileId) {
       toast("Add a pay profile first.");
@@ -123,6 +125,24 @@ $(function () {
     setControlsForStatus("running");
     announce("Session started.");
     tick();
+    return true;
+  }
+
+  // Shared by the Pause button and the "Pause session" PWA shortcut.
+  function pauseSession() {
+    if (!Timer.isRunning()) return false;
+    Timer.pause();
+    setControlsForStatus("paused");
+    announce("Taking a break. Timer paused.");
+    return true;
+  }
+
+  // Shared by the Back to Work button and the "Start session" PWA shortcut (see startSession).
+  function resumeSession() {
+    if (!Timer.isPaused()) return false;
+    Timer.resume();
+    setControlsForStatus("running");
+    announce("Back to work. Timer resumed.");
     return true;
   }
 
@@ -142,19 +162,8 @@ $(function () {
   }
 
   $("#start-btn").on("click", startSession);
-
-  $("#pause-btn").on("click", function () {
-    Timer.pause();
-    setControlsForStatus("paused");
-    announce("Taking a break. Timer paused.");
-  });
-
-  $("#resume-btn").on("click", function () {
-    Timer.resume();
-    setControlsForStatus("running");
-    announce("Back to work. Timer resumed.");
-  });
-
+  $("#pause-btn").on("click", pauseSession);
+  $("#resume-btn").on("click", resumeSession);
   $("#stop-btn").on("click", stopSession);
 
   $("#clear-history").on("click", function () {
@@ -718,10 +727,13 @@ $(function () {
   Timer.startTicking();
 
   // Triggered by the PWA's long-press home-screen shortcuts ("Start session" /
-  // "Stop session" in manifest.json), which just open index.html with ?action=...
+  // "Pause session" / "Stop session" in manifest.json), which just open index.html
+  // with ?action=... -- startSession() itself resumes instead of no-op'ing if paused.
   var shortcutAction = new URLSearchParams(location.search).get("action");
   if (shortcutAction === "start") {
     startSession();
+  } else if (shortcutAction === "pause") {
+    pauseSession();
   } else if (shortcutAction === "stop") {
     stopSession();
   }

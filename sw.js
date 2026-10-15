@@ -1,5 +1,5 @@
 // Bump this on every deploy that changes any cached file, so clients pick up the update.
-var CACHE_NAME = "pay-time-v6";
+var CACHE_NAME = "pay-time-v7";
 
 var APP_SHELL = [
   "./",
@@ -18,7 +18,11 @@ var APP_SHELL = [
   "js/app.js",
   "icons/icon.svg",
   "icons/icon-192.png",
-  "icons/icon-512.png"
+  "icons/icon-512.png",
+  "icons/apple-touch-icon.png",
+  "icons/icon-play.png",
+  "icons/icon-pause.png",
+  "icons/icon-stop.png"
 ];
 
 self.addEventListener("install", function (event) {
